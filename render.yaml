@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: reqsys-api
+    runtime: docker
+    # Đường dẫn tới Dockerfile tính từ gốc repo
+    dockerfilePath: ./reqsys/Dockerfile
+    dockerContext: ./reqsys
+    # Chạy migrate sau khi deploy
+    preDeployCommand: "python manage.py migrate --noinput"
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true   # Render tự sinh key ngẫu nhiên bảo mật
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: reqsys-db
+          property: connectionString
+      - key: EMAIL_HOST_USER
+        sync: false   # Nhập thủ công trên Render Dashboard
+      - key: EMAIL_HOST_PASSWORD
+        sync: false   # Nhập thủ công trên Render Dashboard
+
+databases:
+  - name: reqsys-db
+    plan: free
+    databaseName: reqsys
+    user: reqsys_user

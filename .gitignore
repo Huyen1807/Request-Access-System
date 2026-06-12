@@ -1,1 +1,20 @@
+# Môi trường ảo
 .venv
+
+# Postman cache
+.postman
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Database local
+reqsys/db.sqlite3
+
+# Static files đã build
+reqsys/staticfiles/
+
+# Biến môi trường thật
+.env
+*.env

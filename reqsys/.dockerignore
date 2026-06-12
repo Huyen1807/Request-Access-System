@@ -1,0 +1,23 @@
+# Loại trừ môi trường ảo
+.venv
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Database local
+db.sqlite3
+
+# Git và công cụ dev
+.git
+.gitignore
+.postman
+
+# Static files đã build (Dockerfile sẽ chạy collectstatic bên trong container)
+staticfiles/
+
+# File tạm và IDE
+*.env
+.env.*

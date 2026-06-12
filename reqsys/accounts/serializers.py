@@ -60,4 +60,27 @@ class UserCreateSerializer(serializers.ModelSerializer):
         except Group.DoesNotExist:
             pass # Or raise validation error if you prefer strict checking, but ChoiceField already checked it.
             
+        # Send email to the newly created user
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        subject = 'Thông tin đăng nhập hệ thống Request Access System'
+        message = (
+            f"Xin chào {user.first_name} {user.last_name},\n\n"
+            f"Tài khoản của bạn đã được tạo thành công với vai trò: {group_name}.\n\n"
+            f"Thông tin đăng nhập:\n"
+            f"- Email: {user.email}\n"
+            f"- Mật khẩu: {validated_data.get('password')}\n\n"
+            f"Vui lòng đổi mật khẩu sau khi đăng nhập (nếu hệ thống yêu cầu).\n\n"
+            f"Trân trọng,\nBan Quản trị"
+        )
+        
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=None,  # Will use DEFAULT_FROM_EMAIL from settings
+            recipient_list=[user.email],
+            fail_silently=True,
+        )
+            
         return user

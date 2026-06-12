@@ -16,5 +16,8 @@ RUN python manage.py collectstatic --noinput
 # Expose port 8000 ra ngoài container
 EXPOSE 8000
 
-# Khởi động server với gunicorn thay vì runserver
-CMD ["gunicorn", "reqsys.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]
+# Cấp quyền thực thi cho build.sh và chạy nó trước khi khởi động Gunicorn
+RUN chmod +x build.sh
+
+CMD ["/bin/sh", "-c", "./build.sh && gunicorn reqsys.wsgi:application --bind 0.0.0.0:8000 --workers 2"]
+

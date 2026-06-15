@@ -84,3 +84,38 @@ class UserCreateSerializer(serializers.ModelSerializer):
         )
             
         return user
+
+class UserSerializer(serializers.ModelSerializer):
+    groups = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ('id', 'email', 'first_name', 'last_name', 'is_active', 'groups')
+        read_only_fields = ('id', 'email')
+
+    def get_groups(self, obj):
+        return [group.name for group in obj.groups.all()]
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    group_name = serializers.ChoiceField(choices=['requester', 'owner'], write_only=True, required=False)
+
+    class Meta:
+        model = User
+        fields = ('first_name', 'last_name', 'is_active', 'group_name')
+
+    def update(self, instance, validated_data):
+        group_name = validated_data.pop('group_name', None)
+        instance = super().update(instance, validated_data)
+        
+        if group_name:
+            try:
+                group = Group.objects.get(name=group_name)
+                # Remove existing requester/owner groups
+                current_roles = instance.groups.filter(name__in=['requester', 'owner'])
+                instance.groups.remove(*current_roles)
+                instance.groups.add(group)
+            except Group.DoesNotExist:
+                pass
+                
+        return instance

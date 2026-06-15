@@ -1,16 +1,24 @@
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import CustomTokenObtainPairSerializer
+from rest_framework import viewsets, generics
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth import get_user_model
+from .serializers import CustomTokenObtainPairSerializer, UserCreateSerializer, UserSerializer, UserUpdateSerializer, UserListSerializer
+from .permissions import IsSubAdmin
+
+User = get_user_model()
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
-from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
-from .serializers import UserCreateSerializer, UserSerializer, UserUpdateSerializer
-from .permissions import IsSubAdmin
-from django.contrib.auth import get_user_model
 
-User = get_user_model()
+class OwnerListView(generics.ListAPIView):
+    serializer_class = UserListSerializer
+    permission_classes = [IsAuthenticated, IsSubAdmin]
+
+    def get_queryset(self):
+        return User.objects.filter(groups__name='owner').order_by('last_name', 'first_name')
+
 
 class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsSubAdmin]

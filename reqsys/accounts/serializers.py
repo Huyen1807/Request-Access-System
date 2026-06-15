@@ -43,6 +43,13 @@ from django.contrib.auth.models import Group
 
 User = get_user_model()
 
+
+class UserListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name']
+
+
 class UserCreateSerializer(serializers.ModelSerializer):
     group_name = serializers.ChoiceField(choices=['requester', 'owner'], write_only=True)
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})

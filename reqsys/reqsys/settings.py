@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'accounts',
     'applications',
+    'access_requests',
 ]
 
 MIDDLEWARE = [

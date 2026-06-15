@@ -46,12 +46,14 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'drf_spectacular',
+    'corsheaders',
     'accounts',
     'applications',
     'access_requests',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # Phục vụ static files trên production
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -159,6 +161,11 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# CORS — cho phép Next.js dev server gọi API
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
 
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {

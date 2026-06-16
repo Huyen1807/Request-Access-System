@@ -167,6 +167,13 @@ _cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,ht
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
+# Session Configuration
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
+
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Request Access System API',

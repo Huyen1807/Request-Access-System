@@ -26,11 +26,12 @@ class RequestItemSerializer(serializers.ModelSerializer):
     domain_name = serializers.CharField(source='application.domain.name', read_only=True)
     department_name = serializers.CharField(source='application.domain.department.name', read_only=True)
     owner_email = serializers.SerializerMethodField()
+    access_request_id = serializers.IntegerField(source='access_request.id', read_only=True)
 
     class Meta:
         model = RequestItem
         fields = [
-            'id', 'application', 'application_name', 'application_code',
+            'id', 'access_request_id', 'application', 'application_name', 'application_code',
             'domain_name', 'department_name', 'owner_email', 'status', 'owner_note',
         ]
 
@@ -41,11 +42,10 @@ class RequestItemSerializer(serializers.ModelSerializer):
 class OwnerBatchListSerializer(serializers.ModelSerializer):
     owner_email = serializers.SerializerMethodField()
     item_count = serializers.SerializerMethodField()
-    access_request_id = serializers.IntegerField(source='access_request.id', read_only=True)
 
     class Meta:
         model = OwnerBatch
-        fields = ['id', 'access_request_id', 'owner', 'owner_email', 'status', 'item_count', 'sent_at', 'created_at']
+        fields = ['id', 'owner', 'owner_email', 'status', 'item_count', 'sent_at', 'created_at']
 
     def get_owner_email(self, obj):
         return obj.owner.email if obj.owner else None
@@ -57,11 +57,10 @@ class OwnerBatchListSerializer(serializers.ModelSerializer):
 class OwnerBatchDetailSerializer(serializers.ModelSerializer):
     owner_detail = OwnerSimpleSerializer(source='owner', read_only=True)
     items = RequestItemSerializer(many=True, read_only=True)
-    access_request_id = serializers.IntegerField(source='access_request.id', read_only=True)
 
     class Meta:
         model = OwnerBatch
-        fields = ['id', 'access_request_id', 'owner', 'owner_detail', 'status', 'items', 'sent_at', 'created_at']
+        fields = ['id', 'owner', 'owner_detail', 'status', 'items', 'sent_at', 'created_at']
 
 
 class AccessRequestListSerializer(serializers.ModelSerializer):
@@ -87,7 +86,7 @@ class AccessRequestListSerializer(serializers.ModelSerializer):
 class AccessRequestDetailSerializer(serializers.ModelSerializer):
     requester_detail = RequesterSimpleSerializer(source='requester', read_only=True)
     items = RequestItemSerializer(many=True, read_only=True)
-    batches = OwnerBatchListSerializer(many=True, read_only=True)
+    batches = serializers.SerializerMethodField()
     is_urgent = serializers.SerializerMethodField()
     reviewed_by_email = serializers.CharField(source='reviewed_by.email', read_only=True)
 
@@ -98,6 +97,11 @@ class AccessRequestDetailSerializer(serializers.ModelSerializer):
             'reviewed_by', 'reviewed_by_email', 'created_at', 'reviewed_at', 'deadline',
             'is_urgent', 'items', 'batches',
         ]
+
+    def get_batches(self, obj):
+        batch_ids = obj.items.exclude(batch=None).values_list('batch_id', flat=True).distinct()
+        batches = OwnerBatch.objects.filter(id__in=batch_ids).select_related('owner')
+        return OwnerBatchListSerializer(batches, many=True).data
 
     def get_is_urgent(self, obj):
         if obj.deadline and obj.status in [AccessRequest.Status.PENDING_ADMIN, AccessRequest.Status.PENDING_OWNER]:

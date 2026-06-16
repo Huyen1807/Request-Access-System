@@ -62,18 +62,12 @@ class AccessRequest(models.Model):
 
 
 class OwnerBatch(models.Model):
-    """Nhóm các RequestItem gửi cho cùng một Owner trong một AccessRequest"""
+    """Nhóm các RequestItem gửi cho cùng một Owner, có thể chứa items từ nhiều AccessRequest"""
 
     class Status(models.TextChoices):
         WAITING = 'waiting', 'Chờ gửi'
         SENT = 'sent', 'Đã gửi cho Owner'
 
-    access_request = models.ForeignKey(
-        AccessRequest,
-        on_delete=models.CASCADE,
-        related_name='batches',
-        verbose_name='Yêu cầu',
-    )
     owner = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -99,7 +93,7 @@ class OwnerBatch(models.Model):
 
     def __str__(self):
         owner_str = self.owner.email if self.owner else 'Không có Owner'
-        return f"Batch #{self.pk} - Request #{self.access_request_id} → {owner_str} [{self.get_status_display()}]"
+        return f"Batch #{self.pk} → {owner_str} [{self.get_status_display()}]"
 
 
 class RequestItem(models.Model):

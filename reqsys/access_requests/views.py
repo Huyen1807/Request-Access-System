@@ -32,7 +32,7 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = (
         AccessRequest.objects
         .select_related('requester', 'reviewed_by')
-        .prefetch_related('items__application__domain__department', 'batches__owner')
+        .prefetch_related('items__application__domain__department', 'items__batch__owner')
         .all()
     )
     permission_classes = [IsAuthenticated, IsSubAdmin]
@@ -87,10 +87,12 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
             owner_groups[key]['items'].append(item)
 
         for group in owner_groups.values():
-            batch = OwnerBatch.objects.create(
-                access_request=access_request,
+            batch = OwnerBatch.objects.filter(
                 owner=group['owner'],
-            )
+                status=OwnerBatch.Status.WAITING,
+            ).first()
+            if batch is None:
+                batch = OwnerBatch.objects.create(owner=group['owner'])
             for item in group['items']:
                 item.batch = batch
                 item.status = RequestItem.Status.WAITING_BATCH
@@ -139,8 +141,8 @@ class SubAdminBatchViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return (
             OwnerBatch.objects
-            .select_related('owner', 'access_request')
-            .prefetch_related('items__application__domain__department')
+            .select_related('owner')
+            .prefetch_related('items__application__domain__department', 'items__access_request')
             .all()
         )
 
@@ -156,12 +158,6 @@ class SubAdminBatchViewSet(viewsets.ReadOnlyModelViewSet):
         if batch.status != OwnerBatch.Status.WAITING:
             return Response(
                 {"detail": "Batch này đã được gửi rồi."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if batch.access_request.status != AccessRequest.Status.PENDING_OWNER:
-            return Response(
-                {"detail": "Request liên quan không ở trạng thái pending_owner."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -184,8 +180,8 @@ class OwnerBatchViewSet(viewsets.ReadOnlyModelViewSet):
         return (
             OwnerBatch.objects
             .filter(owner=self.request.user, status=OwnerBatch.Status.SENT)
-            .select_related('access_request__requester')
-            .prefetch_related('items__application__domain__department')
+            .select_related('owner')
+            .prefetch_related('items__application__domain__department', 'items__access_request__requester')
         )
 
     def get_serializer_class(self):

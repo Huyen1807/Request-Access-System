@@ -119,3 +119,14 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 pass
                 
         return instance
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True, write_only=True)
+    new_password = serializers.CharField(required=True, write_only=True)
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Mật khẩu cũ không đúng.")
+        return value
+

@@ -67,7 +67,7 @@ class Application(models.Model):
         verbose_name = "Ứng dụng"
         verbose_name_plural = "Ứng dụng"
         ordering = ['domain', 'name']
-        unique_together = ('name', 'domain')  # Không trùng tên trong cùng domain
+        unique_together = [('name', 'domain'), ('code', 'domain')]  # Không trùng tên và mã trong cùng domain
 
     def __str__(self):
         owner_str = self.owner.email if self.owner else "Chưa có owner"

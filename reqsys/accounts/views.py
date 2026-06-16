@@ -4,9 +4,11 @@ from .serializers import CustomTokenObtainPairSerializer
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
-from rest_framework import viewsets
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .serializers import UserCreateSerializer, UserSerializer, UserUpdateSerializer
+from .serializers import UserCreateSerializer, UserSerializer, UserUpdateSerializer, ChangePasswordSerializer
 from .permissions import IsSubAdmin
 from django.contrib.auth import get_user_model
 
@@ -29,3 +31,13 @@ class UserViewSet(viewsets.ModelViewSet):
         # Soft delete instead of hard delete
         instance.is_active = False
         instance.save()
+
+    @action(detail=False, methods=['post'], url_path='change-password')
+    def change_password(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = request.user
+            user.set_password(serializer.validated_data['new_password'])
+            user.save()
+            return Response({"detail": "Đổi mật khẩu thành công."}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

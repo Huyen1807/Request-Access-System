@@ -75,14 +75,26 @@ class ApplicationSerializer(serializers.ModelSerializer):
         # Kiểm tra unique_together khi create/update
         domain = attrs.get('domain', getattr(self.instance, 'domain', None))
         name = attrs.get('name', getattr(self.instance, 'name', None))
+        code = attrs.get('code', getattr(self.instance, 'code', None))
 
-        qs = Application.objects.filter(name=name, domain=domain)
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise serializers.ValidationError(
-                {"name": f"Ứng dụng tên '{name}' đã tồn tại trong domain này."}
-            )
+        if name:
+            qs_name = Application.objects.filter(name=name, domain=domain)
+            if self.instance:
+                qs_name = qs_name.exclude(pk=self.instance.pk)
+            if qs_name.exists():
+                raise serializers.ValidationError(
+                    {"name": f"Ứng dụng tên '{name}' đã tồn tại trong domain này."}
+                )
+
+        if code:
+            qs_code = Application.objects.filter(code=code, domain=domain)
+            if self.instance:
+                qs_code = qs_code.exclude(pk=self.instance.pk)
+            if qs_code.exists():
+                raise serializers.ValidationError(
+                    {"code": f"Ứng dụng mã '{code}' đã tồn tại trong domain này."}
+                )
+
         return attrs
 
 

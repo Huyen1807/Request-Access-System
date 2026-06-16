@@ -31,7 +31,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # We can then call super().validate by injecting username into attrs
         # to satisfy the parent class validation logic which checks for username
         attrs['username'] = email
-        return super().validate(attrs)
+        data = super().validate(attrs)
+
+        groups = list(user.groups.values_list('name', flat=True))
+        data['role'] = groups[0] if groups else None
+        data['email'] = user.email
+        return data
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group

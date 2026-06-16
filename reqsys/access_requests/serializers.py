@@ -2,12 +2,19 @@ from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth import get_user_model
-from .models import AccessRequest, RequestItem
+from .models import AccessRequest, RequestItem, OwnerBatch
 from applications.models import Application
 
 User = get_user_model()
 
+
 class RequesterSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name']
+
+
+class OwnerSimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'email', 'first_name', 'last_name']
@@ -18,10 +25,43 @@ class RequestItemSerializer(serializers.ModelSerializer):
     application_code = serializers.CharField(source='application.code', read_only=True)
     domain_name = serializers.CharField(source='application.domain.name', read_only=True)
     department_name = serializers.CharField(source='application.domain.department.name', read_only=True)
+    owner_email = serializers.SerializerMethodField()
 
     class Meta:
         model = RequestItem
-        fields = ['id', 'application', 'application_name', 'application_code', 'domain_name', 'department_name']
+        fields = [
+            'id', 'application', 'application_name', 'application_code',
+            'domain_name', 'department_name', 'owner_email', 'status', 'owner_note',
+        ]
+
+    def get_owner_email(self, obj):
+        return obj.application.owner.email if obj.application.owner else None
+
+
+class OwnerBatchListSerializer(serializers.ModelSerializer):
+    owner_email = serializers.SerializerMethodField()
+    item_count = serializers.SerializerMethodField()
+    access_request_id = serializers.IntegerField(source='access_request.id', read_only=True)
+
+    class Meta:
+        model = OwnerBatch
+        fields = ['id', 'access_request_id', 'owner', 'owner_email', 'status', 'item_count', 'sent_at', 'created_at']
+
+    def get_owner_email(self, obj):
+        return obj.owner.email if obj.owner else None
+
+    def get_item_count(self, obj):
+        return obj.items.count()
+
+
+class OwnerBatchDetailSerializer(serializers.ModelSerializer):
+    owner_detail = OwnerSimpleSerializer(source='owner', read_only=True)
+    items = RequestItemSerializer(many=True, read_only=True)
+    access_request_id = serializers.IntegerField(source='access_request.id', read_only=True)
+
+    class Meta:
+        model = OwnerBatch
+        fields = ['id', 'access_request_id', 'owner', 'owner_detail', 'status', 'items', 'sent_at', 'created_at']
 
 
 class AccessRequestListSerializer(serializers.ModelSerializer):
@@ -47,6 +87,7 @@ class AccessRequestListSerializer(serializers.ModelSerializer):
 class AccessRequestDetailSerializer(serializers.ModelSerializer):
     requester_detail = RequesterSimpleSerializer(source='requester', read_only=True)
     items = RequestItemSerializer(many=True, read_only=True)
+    batches = OwnerBatchListSerializer(many=True, read_only=True)
     is_urgent = serializers.SerializerMethodField()
     reviewed_by_email = serializers.CharField(source='reviewed_by.email', read_only=True)
 
@@ -55,7 +96,7 @@ class AccessRequestDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'requester', 'requester_detail', 'status', 'reason', 'review_note',
             'reviewed_by', 'reviewed_by_email', 'created_at', 'reviewed_at', 'deadline',
-            'is_urgent', 'items'
+            'is_urgent', 'items', 'batches',
         ]
 
     def get_is_urgent(self, obj):
@@ -86,14 +127,13 @@ class AccessRequestCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         application_ids = set(validated_data.pop('application_ids'))
         request_obj = AccessRequest.objects.create(**validated_data)
-        
-        # Create RequestItems
+
         items = [
             RequestItem(access_request=request_obj, application_id=app_id)
             for app_id in application_ids
         ]
         RequestItem.objects.bulk_create(items)
-        
+
         return request_obj
 
 
@@ -101,3 +141,8 @@ class AccessRequestReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = AccessRequest
         fields = ['review_note']
+
+
+class RequestItemReviewSerializer(serializers.Serializer):
+    item_id = serializers.IntegerField()
+    owner_note = serializers.CharField(required=False, allow_blank=True, default='')

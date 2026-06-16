@@ -34,3 +34,14 @@ class IsRequester(permissions.BasePermission):
             request.user.is_authenticated and
             request.user.groups.filter(name='requester').exists()
         )
+
+class IsNotRequester(permissions.BasePermission):
+    """
+    Allows access only to users who do not belong to the 'requester' group.
+    """
+    def has_permission(self, request, view):
+        return bool(
+            request.user and
+            request.user.is_authenticated and
+            not request.user.groups.filter(name='requester').exists()
+        )

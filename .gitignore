@@ -17,4 +17,6 @@ reqsys/staticfiles/
 
 # Biến môi trường thật
 .env
-*.env
+*.env
+
+CLAUDE.md

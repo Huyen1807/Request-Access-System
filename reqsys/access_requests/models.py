@@ -12,6 +12,7 @@ class AccessRequest(models.Model):
         PENDING_ADMIN = 'pending_admin', 'Chờ Sub-admin xử lý'
         PENDING_OWNER = 'pending_owner', 'Chờ Owner xử lý'
         REJECTED_BY_ADMIN = 'rejected_by_admin', 'Sub-admin từ chối'
+        COMPLETED = 'completed', 'Đã hoàn thành'
 
     requester = models.ForeignKey(
         User,
@@ -60,8 +61,55 @@ class AccessRequest(models.Model):
         return f"Request #{self.pk} - {self.requester.email} [{self.get_status_display()}]"
 
 
+class OwnerBatch(models.Model):
+    """Nhóm các RequestItem gửi cho cùng một Owner trong một AccessRequest"""
+
+    class Status(models.TextChoices):
+        WAITING = 'waiting', 'Chờ gửi'
+        SENT = 'sent', 'Đã gửi cho Owner'
+
+    access_request = models.ForeignKey(
+        AccessRequest,
+        on_delete=models.CASCADE,
+        related_name='batches',
+        verbose_name='Yêu cầu',
+    )
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='received_batches',
+        verbose_name='Owner',
+        limit_choices_to={'groups__name': 'owner'},
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.WAITING,
+        verbose_name='Trạng thái',
+    )
+    sent_at = models.DateTimeField(null=True, blank=True, verbose_name='Thời gian gửi')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Thời gian tạo')
+
+    class Meta:
+        verbose_name = 'Batch gửi Owner'
+        verbose_name_plural = 'Batch gửi Owner'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        owner_str = self.owner.email if self.owner else 'Không có Owner'
+        return f"Batch #{self.pk} - Request #{self.access_request_id} → {owner_str} [{self.get_status_display()}]"
+
+
 class RequestItem(models.Model):
     """Mỗi Application mà Requester yêu cầu cấp quyền trong một AccessRequest"""
+
+    class Status(models.TextChoices):
+        WAITING_BATCH = 'waiting_batch', 'Chờ gửi batch'
+        PENDING_OWNER = 'pending_owner', 'Chờ Owner xử lý'
+        APPROVED = 'approved', 'Đã duyệt'
+        REJECTED = 'rejected', 'Đã từ chối'
 
     access_request = models.ForeignKey(
         AccessRequest,
@@ -75,6 +123,24 @@ class RequestItem(models.Model):
         related_name='request_items',
         verbose_name='Ứng dụng',
     )
+    batch = models.ForeignKey(
+        OwnerBatch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='items',
+        verbose_name='Batch',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.WAITING_BATCH,
+        verbose_name='Trạng thái',
+    )
+    owner_note = models.TextField(
+        blank=True,
+        verbose_name='Ghi chú của Owner',
+    )
 
     class Meta:
         verbose_name = 'Mục yêu cầu'
@@ -82,4 +148,4 @@ class RequestItem(models.Model):
         unique_together = ('access_request', 'application')
 
     def __str__(self):
-        return f"Request #{self.access_request_id} → {self.application.code}"
+        return f"Request #{self.access_request_id} → {self.application.code} [{self.get_status_display()}]"

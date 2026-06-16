@@ -103,7 +103,8 @@ class RequestItem(models.Model):
         WAITING_BATCH = 'waiting_batch', 'Chờ gửi batch'
         PENDING_OWNER = 'pending_owner', 'Chờ Owner xử lý'
         APPROVED = 'approved', 'Đã duyệt'
-        REJECTED = 'rejected', 'Đã từ chối'
+        REJECTED_BY_OWNER = 'rejected_by_owner', 'Owner từ chối'
+        REJECTED_BY_ADMIN = 'rejected_by_admin', 'Sub-admin thu hồi'
 
     access_request = models.ForeignKey(
         AccessRequest,

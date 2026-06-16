@@ -3,6 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
+from django.core.mail import send_mail
+from django.contrib.auth import get_user_model
 from .models import AccessRequest, RequestItem, OwnerBatch
 from .serializers import (
     AccessRequestListSerializer,
@@ -15,15 +17,125 @@ from .serializers import (
 )
 from accounts.permissions import IsSubAdmin, IsRequester, IsOwner
 
+User = get_user_model()
+
+
+def _notify_requester_rejected(access_request):
+    requester = access_request.requester
+    send_mail(
+        subject='[Request Access System] Yêu cầu của bạn đã bị từ chối',
+        message=(
+            f"Xin chào {requester.first_name} {requester.last_name},\n\n"
+            f"Yêu cầu #{access_request.pk} của bạn đã bị Sub-admin từ chối.\n\n"
+            f"Lý do: {access_request.review_note or 'Không có ghi chú.'}\n\n"
+            f"Trân trọng,\nBan Quản trị"
+        ),
+        from_email=None,
+        recipient_list=[requester.email],
+        fail_silently=True,
+    )
+
+
+def _notify_revert(access_request, previous_status):
+    requester = access_request.requester
+    new_status_display = access_request.get_status_display()
+
+    send_mail(
+        subject='[Request Access System] Yêu cầu của bạn đã được cập nhật trạng thái',
+        message=(
+            f"Xin chào {requester.first_name} {requester.last_name},\n\n"
+            f"Yêu cầu #{access_request.pk} của bạn đã được chuyển sang trạng thái: {new_status_display}.\n\n"
+            f"Ghi chú: {access_request.review_note or 'Không có ghi chú.'}\n\n"
+            f"Trân trọng,\nBan Quản trị"
+        ),
+        from_email=None,
+        recipient_list=[requester.email],
+        fail_silently=True,
+    )
+
+    if previous_status == AccessRequest.Status.PENDING_OWNER:
+        owners = (
+            User.objects
+            .filter(
+                received_batches__status=OwnerBatch.Status.SENT,
+                received_batches__items__access_request=access_request,
+            )
+            .distinct()
+        )
+        for owner in owners:
+            send_mail(
+                subject='[Request Access System] Thông báo: Yêu cầu liên quan đến batch của bạn đã bị revert',
+                message=(
+                    f"Xin chào {owner.first_name} {owner.last_name},\n\n"
+                    f"Yêu cầu #{access_request.pk} mà bạn đang xử lý đã được Sub-admin revert "
+                    f"về trạng thái: {new_status_display}.\n\n"
+                    f"Lý do: {access_request.review_note or 'Không có ghi chú.'}\n\n"
+                    f"Vui lòng liên hệ Sub-admin để biết thêm chi tiết.\n\n"
+                    f"Trân trọng,\nBan Quản trị"
+                ),
+                from_email=None,
+                recipient_list=[owner.email],
+                fail_silently=True,
+            )
+
+
+def _build_item_result_lines(access_request):
+    items = access_request.items.select_related('application').all()
+    lines = []
+    for item in items:
+        app = item.application
+        if item.status == RequestItem.Status.APPROVED:
+            lines.append(f"  ✔ {app.name} ({app.code}) — Đã duyệt")
+        elif item.status == RequestItem.Status.REJECTED_BY_OWNER:
+            reason = item.owner_note or 'Không có lý do'
+            lines.append(f"  ✘ {app.name} ({app.code}) — Từ chối: {reason}")
+        else:
+            lines.append(f"  ⏳ {app.name} ({app.code}) — Đang xử lý")
+    return '\n'.join(lines)
+
+
+def _notify_requester_completion(access_request):
+    requester = access_request.requester
+    result_lines = _build_item_result_lines(access_request)
+    send_mail(
+        subject=f'[Request Access System] Yêu cầu #{access_request.pk} của bạn đã được xử lý xong',
+        message=(
+            f"Xin chào {requester.first_name} {requester.last_name},\n\n"
+            f"Yêu cầu #{access_request.pk} của bạn đã được xử lý xong.\n\n"
+            f"Kết quả chi tiết:\n{result_lines}\n\n"
+            f"Trân trọng,\nBan Quản trị"
+        ),
+        from_email=None,
+        recipient_list=[requester.email],
+        fail_silently=True,
+    )
+
+
+def _notify_requester_completion_updated(access_request):
+    requester = access_request.requester
+    result_lines = _build_item_result_lines(access_request)
+    send_mail(
+        subject=f'[Request Access System] Kết quả yêu cầu #{access_request.pk} đã được cập nhật',
+        message=(
+            f"Xin chào {requester.first_name} {requester.last_name},\n\n"
+            f"Kết quả yêu cầu #{access_request.pk} đã được Owner cập nhật.\n\n"
+            f"Kết quả mới:\n{result_lines}\n\n"
+            f"Trân trọng,\nBan Quản trị"
+        ),
+        from_email=None,
+        recipient_list=[requester.email],
+        fail_silently=True,
+    )
+
 
 def _check_request_completion(access_request):
-    """Mark AccessRequest as completed when all items are processed by owners."""
     has_unfinished = access_request.items.filter(
         status__in=[RequestItem.Status.WAITING_BATCH, RequestItem.Status.PENDING_OWNER]
     ).exists()
     if not has_unfinished:
         access_request.status = AccessRequest.Status.COMPLETED
         access_request.save(update_fields=['status'])
+        _notify_requester_completion(access_request)
 
 
 class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
@@ -113,11 +225,24 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
         access_request.reviewed_at = timezone.now()
         access_request.save()
 
+        _notify_requester_rejected(access_request)
+
         return Response(AccessRequestDetailSerializer(access_request).data)
 
-    @action(detail=True, methods=['patch'])
+    @action(detail=True, methods=['patch'], serializer_class=AccessRequestReviewSerializer)
     def revert(self, request, pk=None):
         access_request = self.get_object()
+        serializer = self.get_serializer(access_request, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        revert_note = serializer.validated_data.get('review_note', '').strip()
+        if not revert_note:
+            return Response(
+                {"detail": "Phải cung cấp lý do khi revert request."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        previous_status = access_request.status
 
         if access_request.status == AccessRequest.Status.PENDING_OWNER:
             access_request.status = AccessRequest.Status.REJECTED_BY_ADMIN
@@ -129,7 +254,46 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if access_request.review_note:
+            access_request.review_note += f"\n\n[REVERT] {revert_note}"
+        else:
+            access_request.review_note = f"[REVERT] {revert_note}"
         access_request.save()
+
+        if previous_status == AccessRequest.Status.PENDING_OWNER:
+            # Thu hồi toàn bộ items (kể cả đã được owner duyệt/từ chối)
+            access_request.items.exclude(
+                status=RequestItem.Status.REJECTED_BY_ADMIN
+            ).update(status=RequestItem.Status.REJECTED_BY_ADMIN, batch=None)
+        else:
+            # Khôi phục items bị thu hồi về WAITING_BATCH và re-batch theo owner
+            revoked_items = list(
+                access_request.items
+                .filter(status=RequestItem.Status.REJECTED_BY_ADMIN)
+                .select_related('application__owner')
+            )
+            owner_groups = {}
+            for item in revoked_items:
+                owner = item.application.owner
+                key = owner.id if owner else None
+                if key not in owner_groups:
+                    owner_groups[key] = {'owner': owner, 'items': []}
+                owner_groups[key]['items'].append(item)
+
+            for group in owner_groups.values():
+                batch = OwnerBatch.objects.filter(
+                    owner=group['owner'],
+                    status=OwnerBatch.Status.WAITING,
+                ).first()
+                if batch is None:
+                    batch = OwnerBatch.objects.create(owner=group['owner'])
+                for item in group['items']:
+                    item.batch = batch
+                    item.status = RequestItem.Status.WAITING_BATCH
+                RequestItem.objects.bulk_update(group['items'], ['batch', 'status'])
+
+        _notify_revert(access_request, previous_status)
+
         return Response(AccessRequestDetailSerializer(access_request).data)
 
 
@@ -210,7 +374,7 @@ class OwnerBatchViewSet(viewsets.ReadOnlyModelViewSet):
         item.owner_note = owner_note
         item.save()
 
-        _check_request_completion(batch.access_request)
+        _check_request_completion(item.access_request)
 
         return Response({"detail": "Đã duyệt item.", "item_id": item.id, "status": item.status})
 
@@ -221,7 +385,13 @@ class OwnerBatchViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         item_id = serializer.validated_data['item_id']
-        owner_note = serializer.validated_data['owner_note']
+        owner_note = serializer.validated_data['owner_note'].strip()
+
+        if not owner_note:
+            return Response(
+                {"detail": "Phải cung cấp lý do khi từ chối item."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             item = batch.items.get(id=item_id, status=RequestItem.Status.PENDING_OWNER)
@@ -231,13 +401,46 @@ class OwnerBatchViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        item.status = RequestItem.Status.REJECTED
+        item.status = RequestItem.Status.REJECTED_BY_OWNER
         item.owner_note = owner_note
         item.save()
 
-        _check_request_completion(batch.access_request)
+        _check_request_completion(item.access_request)
 
         return Response({"detail": "Đã từ chối item.", "item_id": item.id, "status": item.status})
+
+    @action(detail=True, methods=['patch'], serializer_class=RequestItemReviewSerializer)
+    def revert_item(self, request, pk=None):
+        batch = self.get_object()
+        serializer = RequestItemReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        item_id = serializer.validated_data['item_id']
+
+        try:
+            item = batch.items.select_related('access_request').get(
+                id=item_id,
+                status__in=[RequestItem.Status.APPROVED, RequestItem.Status.REJECTED_BY_OWNER],
+            )
+        except RequestItem.DoesNotExist:
+            return Response(
+                {"detail": "Item không tồn tại trong batch này hoặc không ở trạng thái approved/rejected_by_owner."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        access_request = item.access_request
+        was_completed = access_request.status == AccessRequest.Status.COMPLETED
+
+        item.status = RequestItem.Status.PENDING_OWNER
+        item.owner_note = ''
+        item.save()
+
+        if was_completed:
+            access_request.status = AccessRequest.Status.PENDING_OWNER
+            access_request.save(update_fields=['status'])
+            _notify_requester_completion_updated(access_request)
+
+        return Response({"detail": "Đã revert item.", "item_id": item.id, "status": item.status})
 
 
 class RequesterAccessRequestViewSet(viewsets.ModelViewSet):

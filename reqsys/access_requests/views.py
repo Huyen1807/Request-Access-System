@@ -11,6 +11,7 @@ from .serializers import (
     AccessRequestDetailSerializer,
     AccessRequestCreateSerializer,
     AccessRequestReviewSerializer,
+    AccessRequestDisputeSerializer,
     OwnerBatchListSerializer,
     OwnerBatchDetailSerializer,
     RequestItemReviewSerializer,
@@ -443,6 +444,63 @@ class OwnerBatchViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({"detail": "Đã revert item.", "item_id": item.id, "status": item.status})
 
 
+def _notify_owners_revoke_access(access_request, approved_items):
+    owner_groups = {}
+    for item in approved_items:
+        owner = item.application.owner
+        if owner is None:
+            continue
+        if owner.id not in owner_groups:
+            owner_groups[owner.id] = {'owner': owner, 'items': []}
+        owner_groups[owner.id]['items'].append(item)
+
+    requester = access_request.requester
+    for group in owner_groups.values():
+        owner = group['owner']
+        app_list = '\n'.join(
+            f"  - {item.application.name} ({item.application.code})"
+            for item in group['items']
+        )
+        send_mail(
+            subject=f'[Request Access System] Thu hồi quyền truy cập - Yêu cầu #{access_request.pk}',
+            message=(
+                f"Xin chào {owner.first_name} {owner.last_name},\n\n"
+                f"Requester {requester.first_name} {requester.last_name} ({requester.email}) "
+                f"đã hủy yêu cầu cấp quyền #{access_request.pk}.\n\n"
+                f"Vui lòng thu hồi quyền truy cập của các ứng dụng sau:\n"
+                f"{app_list}\n\n"
+                f"Trân trọng,\nHệ thống Request Access System"
+            ),
+            from_email=None,
+            recipient_list=[owner.email],
+            fail_silently=True,
+        )
+
+
+def _notify_subadmin_dispute(access_request):
+    if not access_request.reviewed_by:
+        return
+
+    requester = access_request.requester
+    send_mail(
+        subject=f'[Request Access System] Khiếu nại yêu cầu #{access_request.pk}',
+        message=(
+            f"Xin chào {access_request.reviewed_by.first_name} {access_request.reviewed_by.last_name},\n\n"
+            f"Requester đã khiếu nại quyết định từ chối của bạn.\n\n"
+            f"Thông tin yêu cầu:\n"
+            f"- ID: {access_request.pk}\n"
+            f"- Người yêu cầu: {requester.first_name} {requester.last_name} ({requester.email})\n"
+            f"- Ghi chú từ chối trước đó: {access_request.review_note or 'Không có'}\n\n"
+            f"Lý do khiếu nại:\n{access_request.dispute_reason}\n\n"
+            f"Vui lòng đăng nhập hệ thống để xem xét lại yêu cầu này.\n\n"
+            f"Trân trọng,\nHệ thống Request Access System"
+        ),
+        from_email=None,
+        recipient_list=[access_request.reviewed_by.email],
+        fail_silently=True,
+    )
+
+
 class RequesterAccessRequestViewSet(viewsets.ModelViewSet):
     """Quản lý các Access Request của chính Requester (chỉ List, Retrieve, Create)"""
 
@@ -450,7 +508,7 @@ class RequesterAccessRequestViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['created_at', 'deadline', 'status']
     ordering = ['-created_at']
-    http_method_names = ['get', 'post', 'head', 'options']
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
 
     def get_queryset(self):
         return (
@@ -469,3 +527,52 @@ class RequesterAccessRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(requester=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        access_request = self.get_object()
+
+        non_cancellable = [AccessRequest.Status.CANCELED, AccessRequest.Status.REJECTED_BY_ADMIN]
+        if access_request.status in non_cancellable:
+            return Response(
+                {"detail": "Không thể hủy yêu cầu ở trạng thái hiện tại."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        approved_items = list(
+            access_request.items
+            .filter(status=RequestItem.Status.APPROVED)
+            .select_related('application__owner')
+        )
+
+        if approved_items:
+            _notify_owners_revoke_access(access_request, approved_items)
+
+        access_request.items.update(status=RequestItem.Status.CANCELED, batch=None)
+        access_request.status = AccessRequest.Status.CANCELED
+        access_request.save(update_fields=['status'])
+
+        access_request.refresh_from_db()
+        return Response(AccessRequestDetailSerializer(access_request).data)
+
+    @action(detail=True, methods=['patch'], serializer_class=AccessRequestDisputeSerializer)
+    def dispute(self, request, pk=None):
+        access_request = self.get_object()
+
+        if access_request.status != AccessRequest.Status.REJECTED_BY_ADMIN:
+            return Response(
+                {"detail": "Chỉ có thể khiếu nại yêu cầu đang ở trạng thái bị từ chối bởi Sub-admin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = self.get_serializer(access_request, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        access_request.dispute_reason = serializer.validated_data['dispute_reason']
+        access_request.disputed_at = timezone.now()
+        access_request.status = AccessRequest.Status.PENDING_ADMIN
+        access_request.save(update_fields=['dispute_reason', 'disputed_at', 'status'])
+
+        _notify_subadmin_dispute(access_request)
+
+        return Response(AccessRequestDetailSerializer(access_request).data)

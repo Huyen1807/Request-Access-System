@@ -16,6 +16,7 @@ class AccessRequest(models.Model):
         PENDING_OWNER = 'pending_owner', 'Chờ Owner xử lý'
         REJECTED_BY_ADMIN = 'rejected_by_admin', 'Sub-admin từ chối'
         COMPLETED = 'completed', 'Đã hoàn thành'
+        CANCELED = 'canceled', 'Đã hủy'
 
     requester = models.ForeignKey(
         User,
@@ -52,6 +53,11 @@ class AccessRequest(models.Model):
         blank=True,
         verbose_name='Thời hạn xử lý',
     )
+    dispute_reason = models.TextField(
+        blank=True,
+        verbose_name='Lý do khiếu nại',
+    )
+    disputed_at = models.DateTimeField(null=True, blank=True, verbose_name='Thời gian khiếu nại')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Thời gian tạo')
     reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name='Thời gian xử lý')
 
@@ -112,6 +118,7 @@ class RequestItem(models.Model):
         APPROVED = 'approved', 'Đã duyệt'
         REJECTED_BY_OWNER = 'rejected_by_owner', 'Owner từ chối'
         REJECTED_BY_ADMIN = 'rejected_by_admin', 'Sub-admin thu hồi'
+        CANCELED = 'canceled', 'Đã hủy'
 
     access_request = models.ForeignKey(
         AccessRequest,

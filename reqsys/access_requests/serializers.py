@@ -95,7 +95,7 @@ class AccessRequestDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'requester', 'requester_detail', 'status', 'reason', 'review_note',
             'reviewed_by', 'reviewed_by_email', 'created_at', 'reviewed_at', 'deadline',
-            'is_urgent', 'items', 'batches',
+            'is_urgent', 'dispute_reason', 'disputed_at', 'items', 'batches',
         ]
 
     def get_batches(self, obj):
@@ -145,6 +145,17 @@ class AccessRequestReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = AccessRequest
         fields = ['review_note']
+
+
+class AccessRequestDisputeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccessRequest
+        fields = ['dispute_reason']
+
+    def validate_dispute_reason(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Phải cung cấp lý do khiếu nại.")
+        return value.strip()
 
 
 class RequestItemReviewSerializer(serializers.Serializer):

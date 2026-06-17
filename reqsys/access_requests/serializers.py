@@ -26,7 +26,7 @@ class RequestItemSerializer(serializers.ModelSerializer):
     domain_name = serializers.CharField(source='application.domain.name', read_only=True)
     department_name = serializers.CharField(source='application.domain.department.name', read_only=True)
     owner_email = serializers.SerializerMethodField()
-    access_request_id = serializers.IntegerField(source='access_request.id', read_only=True)
+    access_request_id = serializers.CharField(source='access_request.id', read_only=True)
 
     class Meta:
         model = RequestItem
@@ -113,7 +113,7 @@ class AccessRequestDetailSerializer(serializers.ModelSerializer):
 
 class AccessRequestCreateSerializer(serializers.ModelSerializer):
     application_ids = serializers.ListField(
-        child=serializers.IntegerField(),
+        child=serializers.CharField(),
         write_only=True,
         allow_empty=False
     )
@@ -126,7 +126,7 @@ class AccessRequestCreateSerializer(serializers.ModelSerializer):
         applications = Application.objects.filter(id__in=value)
         if applications.count() != len(set(value)):
             raise serializers.ValidationError("Một số Application ID không hợp lệ hoặc không tồn tại.")
-        return value
+        return list(set(value))
 
     def create(self, validated_data):
         application_ids = set(validated_data.pop('application_ids'))
@@ -148,5 +148,5 @@ class AccessRequestReviewSerializer(serializers.ModelSerializer):
 
 
 class RequestItemReviewSerializer(serializers.Serializer):
-    item_id = serializers.IntegerField()
+    item_id = serializers.CharField()
     owner_note = serializers.CharField(required=False, allow_blank=True, default='')

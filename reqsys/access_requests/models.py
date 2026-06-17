@@ -1,12 +1,15 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from applications.models import Application
+from utils import PrefixedIdGenerator
 
 User = get_user_model()
 
 
 class AccessRequest(models.Model):
     """Yêu cầu cấp quyền truy cập ứng dụng từ Requester"""
+
+    id = models.CharField(primary_key=True, max_length=40, default=PrefixedIdGenerator('req'), editable=False)
 
     class Status(models.TextChoices):
         PENDING_ADMIN = 'pending_admin', 'Chờ Sub-admin xử lý'
@@ -64,6 +67,8 @@ class AccessRequest(models.Model):
 class OwnerBatch(models.Model):
     """Nhóm các RequestItem gửi cho cùng một Owner, có thể chứa items từ nhiều AccessRequest"""
 
+    id = models.CharField(primary_key=True, max_length=40, default=PrefixedIdGenerator('batch'), editable=False)
+
     class Status(models.TextChoices):
         WAITING = 'waiting', 'Chờ gửi'
         SENT = 'sent', 'Đã gửi cho Owner'
@@ -98,6 +103,8 @@ class OwnerBatch(models.Model):
 
 class RequestItem(models.Model):
     """Mỗi Application mà Requester yêu cầu cấp quyền trong một AccessRequest"""
+
+    id = models.CharField(primary_key=True, max_length=40, default=PrefixedIdGenerator('item'), editable=False)
 
     class Status(models.TextChoices):
         WAITING_BATCH = 'waiting_batch', 'Chờ gửi batch'

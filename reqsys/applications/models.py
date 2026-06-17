@@ -1,11 +1,13 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from utils import PrefixedIdGenerator
 
 User = get_user_model()
 
 
 class Department(models.Model):
     """PNL trong tập đoàn"""
+    id = models.CharField(primary_key=True, max_length=40, default=PrefixedIdGenerator('dept'), editable=False)
     name = models.CharField(max_length=255, unique=True, verbose_name="Tên phòng ban")
     code = models.CharField(max_length=50, unique=True, verbose_name="Mã phòng ban")
     description = models.TextField(blank=True, verbose_name="Mô tả")
@@ -21,6 +23,7 @@ class Department(models.Model):
 
 class Domain(models.Model):
     """Domain thuộc một phòng ban"""
+    id = models.CharField(primary_key=True, max_length=40, default=PrefixedIdGenerator('dom'), editable=False)
     name = models.CharField(max_length=255, verbose_name="Tên domain")
     code = models.CharField(max_length=50, unique=True, verbose_name="Mã domain")
     description = models.TextField(blank=True, verbose_name="Mô tả")
@@ -43,6 +46,7 @@ class Domain(models.Model):
 
 class Application(models.Model):
     """Ứng dụng thuộc một domain, được quản lý bởi một owner"""
+    id = models.CharField(primary_key=True, max_length=40, default=PrefixedIdGenerator('app'), editable=False)
     name = models.CharField(max_length=255, verbose_name="Tên ứng dụng")
     code = models.CharField(max_length=100, verbose_name="Mã ứng dụng")
     description = models.TextField(blank=True, verbose_name="Mô tả")

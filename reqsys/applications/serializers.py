@@ -100,7 +100,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
 
 class ApplicationAssignOwnerSerializer(serializers.Serializer):
     """Serializer dùng riêng để gán owner cho Application"""
-    owner_id = serializers.IntegerField()
+    owner_id = serializers.IntegerField()  # User vẫn dùng integer ID (Django built-in)
 
     def validate_owner_id(self, value):
         try:

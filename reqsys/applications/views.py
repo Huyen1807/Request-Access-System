@@ -1,4 +1,4 @@
-from rest_framework import viewsets, filters, status
+from rest_framework import viewsets, filters, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -18,31 +18,38 @@ User = get_user_model()
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     """
-    CRUD Phòng ban (Department / PNL)
-    Chỉ Sub-admin mới có quyền truy cập.
+    CRUD Phòng ban (Department / PNL).
+    Read: mọi user đã đăng nhập. Write: chỉ Sub-admin.
     """
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
-    permission_classes = [IsAuthenticated, IsSubAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'code']
     ordering_fields = ['name', 'code']
     ordering = ['name']
 
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsSubAdmin()]
+
 
 class DomainViewSet(viewsets.ModelViewSet):
     """
-    CRUD Domain.
-    Hỗ trợ filter theo phòng ban: ?department_id=<id>
-    Chỉ Sub-admin mới có quyền truy cập.
+    CRUD Domain. Filter: ?department_id=<id>
+    Read: mọi user đã đăng nhập. Write: chỉ Sub-admin.
     """
     queryset = Domain.objects.select_related('department').all()
     serializer_class = DomainSerializer
-    permission_classes = [IsAuthenticated, IsSubAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'code', 'department__name']
     ordering_fields = ['name', 'code']
     ordering = ['name']
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsSubAdmin()]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -54,20 +61,21 @@ class DomainViewSet(viewsets.ModelViewSet):
 
 class ApplicationViewSet(viewsets.ModelViewSet):
     """
-    CRUD Application.
-    Hỗ trợ filter:
-      - ?domain_id=<id>       — lọc theo domain
-      - ?owner_id=<id>        — lọc theo owner
-      - ?is_active=true/false — lọc theo trạng thái
-    Chỉ Sub-admin mới có quyền truy cập.
+    CRUD Application. Filter: ?domain_id, ?owner_id, ?is_active
+    Read: mọi user đã đăng nhập. Write: chỉ Sub-admin.
     """
     queryset = Application.objects.select_related('domain', 'domain__department', 'owner').all()
     serializer_class = ApplicationSerializer
-    permission_classes = [IsAuthenticated, IsSubAdmin]
+
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'code', 'domain__name', 'domain__department__name']
     ordering_fields = ['name', 'code', 'domain__name']
     ordering = ['name']
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsSubAdmin()]
 
     def get_queryset(self):
         queryset = super().get_queryset()

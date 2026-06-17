@@ -508,7 +508,7 @@ class RequesterAccessRequestViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['created_at', 'deadline', 'status']
     ordering = ['-created_at']
-    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+    http_method_names = ['get', 'post', 'head', 'options']
 
     def get_queryset(self):
         return (
@@ -555,7 +555,7 @@ class RequesterAccessRequestViewSet(viewsets.ModelViewSet):
         access_request.refresh_from_db()
         return Response(AccessRequestDetailSerializer(access_request).data)
 
-    @action(detail=True, methods=['patch'], serializer_class=AccessRequestDisputeSerializer)
+    @action(detail=True, methods=['post'], serializer_class=AccessRequestDisputeSerializer)
     def dispute(self, request, pk=None):
         access_request = self.get_object()
 

@@ -226,6 +226,9 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
         access_request.reviewed_at = timezone.now()
         access_request.save()
 
+        # Cập nhật trạng thái của tất cả item bên trong
+        access_request.items.update(status=RequestItem.Status.REJECTED_BY_ADMIN, batch=None)
+
         _notify_requester_rejected(access_request)
 
         return Response(AccessRequestDetailSerializer(access_request).data)

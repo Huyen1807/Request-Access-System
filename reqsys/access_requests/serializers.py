@@ -23,8 +23,6 @@ class OwnerSimpleSerializer(serializers.ModelSerializer):
 class RequestItemSerializer(serializers.ModelSerializer):
     application_name = serializers.CharField(source='application.name', read_only=True)
     application_code = serializers.CharField(source='application.code', read_only=True)
-    domain_name = serializers.CharField(source='application.domain.name', read_only=True)
-    department_name = serializers.CharField(source='application.domain.department.name', read_only=True)
     owner_email = serializers.SerializerMethodField()
     access_request_id = serializers.CharField(source='access_request.id', read_only=True)
 
@@ -32,7 +30,7 @@ class RequestItemSerializer(serializers.ModelSerializer):
         model = RequestItem
         fields = [
             'id', 'access_request_id', 'application', 'application_name', 'application_code',
-            'domain_name', 'department_name', 'owner_email', 'status', 'owner_note',
+            'owner_email', 'status', 'owner_note',
         ]
 
     def get_owner_email(self, obj):
@@ -65,12 +63,37 @@ class OwnerBatchDetailSerializer(serializers.ModelSerializer):
 
 class AccessRequestListSerializer(serializers.ModelSerializer):
     requester_email = serializers.CharField(source='requester.email', read_only=True)
+    requester_name = serializers.SerializerMethodField()
+    domain_name = serializers.SerializerMethodField()
+    department_name = serializers.SerializerMethodField()
+    items = RequestItemSerializer(many=True, read_only=True)
     item_count = serializers.SerializerMethodField()
     is_urgent = serializers.SerializerMethodField()
 
     class Meta:
         model = AccessRequest
-        fields = ['id', 'requester', 'requester_email', 'status', 'created_at', 'deadline', 'item_count', 'is_urgent']
+        fields = ['id', 'requester', 'requester_email', 'requester_name', 'department_name', 'domain_name', 'status', 'created_at', 'deadline', 'item_count', 'is_urgent', 'items']
+
+    def get_requester_name(self, obj):
+        return f"{obj.requester.first_name} {obj.requester.last_name}".strip()
+
+    def get_domain_name(self, obj):
+        domains = []
+        for item in obj.items.all():
+            if item.application and item.application.domain:
+                domain = item.application.domain.name
+                if domain not in domains:
+                    domains.append(domain)
+        return ", ".join(domains)
+
+    def get_department_name(self, obj):
+        departments = []
+        for item in obj.items.all():
+            if item.application and item.application.domain and item.application.domain.department:
+                dept = item.application.domain.department.name
+                if dept not in departments:
+                    departments.append(dept)
+        return ", ".join(departments)
 
     def get_item_count(self, obj):
         return obj.items.count()
@@ -85,6 +108,8 @@ class AccessRequestListSerializer(serializers.ModelSerializer):
 
 class AccessRequestDetailSerializer(serializers.ModelSerializer):
     requester_detail = RequesterSimpleSerializer(source='requester', read_only=True)
+    domain_name = serializers.SerializerMethodField()
+    department_name = serializers.SerializerMethodField()
     items = RequestItemSerializer(many=True, read_only=True)
     batches = serializers.SerializerMethodField()
     is_urgent = serializers.SerializerMethodField()
@@ -93,7 +118,7 @@ class AccessRequestDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = AccessRequest
         fields = [
-            'id', 'requester', 'requester_detail', 'status', 'reason', 'review_note',
+            'id', 'requester', 'requester_detail', 'department_name', 'domain_name', 'status', 'reason', 'review_note',
             'reviewed_by', 'reviewed_by_email', 'created_at', 'reviewed_at', 'deadline',
             'is_urgent', 'dispute_reason', 'disputed_at', 'items', 'batches',
         ]
@@ -109,6 +134,24 @@ class AccessRequestDetailSerializer(serializers.ModelSerializer):
             if timedelta(0) <= time_remaining <= timedelta(hours=24):
                 return True
         return False
+
+    def get_domain_name(self, obj):
+        domains = []
+        for item in obj.items.all():
+            if item.application and item.application.domain:
+                domain = item.application.domain.name
+                if domain not in domains:
+                    domains.append(domain)
+        return ", ".join(domains)
+
+    def get_department_name(self, obj):
+        departments = []
+        for item in obj.items.all():
+            if item.application and item.application.domain and item.application.domain.department:
+                dept = item.application.domain.department.name
+                if dept not in departments:
+                    departments.append(dept)
+        return ", ".join(departments)
 
 
 class AccessRequestCreateSerializer(serializers.ModelSerializer):

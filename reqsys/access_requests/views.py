@@ -297,6 +297,35 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response(AccessRequestDetailSerializer(access_request).data)
 
+    @action(detail=True, methods=['post'])
+    def remind_owner(self, request, pk=None):
+        access_request = self.get_object()
+
+        if access_request.status != AccessRequest.Status.PENDING_OWNER:
+            return Response(
+                {"detail": "Chỉ có thể giục Owner khi request ở trạng thái pending_owner."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        owners = (
+            User.objects
+            .filter(
+                received_batches__items__access_request=access_request,
+                received_batches__items__status=RequestItem.Status.PENDING_OWNER,
+            )
+            .distinct()
+        )
+
+        if not owners.exists():
+            return Response(
+                {"detail": "Không có Owner nào đang chờ xử lý item của request này."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _notify_owners_reminder(access_request, owners)
+
+        return Response({"detail": "Đã gửi email nhắc nhở đến Owner."})
+
 
 class SubAdminBatchViewSet(viewsets.ReadOnlyModelViewSet):
     """Quản lý Batch dành cho Sub-admin: xem và gửi batch cho Owner"""
@@ -477,6 +506,43 @@ def _notify_owners_revoke_access(access_request, approved_items):
         )
 
 
+def _notify_subadmin_reminder(access_request):
+    requester = access_request.requester
+    sub_admins = User.objects.filter(groups__name='sub-admin', is_active=True)
+    for sub_admin in sub_admins:
+        send_mail(
+            subject=f'[Request Access System] Nhắc nhở: Yêu cầu #{access_request.pk} cần được xử lý',
+            message=(
+                f"Xin chào {sub_admin.first_name} {sub_admin.last_name},\n\n"
+                f"Requester {requester.first_name} {requester.last_name} ({requester.email}) "
+                f"đã giục xử lý yêu cầu #{access_request.pk} đang chờ Sub-admin duyệt.\n\n"
+                f"Vui lòng đăng nhập hệ thống để xem xét yêu cầu này.\n\n"
+                f"Trân trọng,\nHệ thống Request Access System"
+            ),
+            from_email=None,
+            recipient_list=[sub_admin.email],
+            fail_silently=True,
+        )
+
+
+def _notify_owners_reminder(access_request, owners):
+    requester = access_request.requester
+    for owner in owners:
+        send_mail(
+            subject=f'[Request Access System] Nhắc nhở: Yêu cầu #{access_request.pk} cần được xử lý',
+            message=(
+                f"Xin chào {owner.first_name} {owner.last_name},\n\n"
+                f"Sub-admin đã giục bạn xử lý các item đang chờ duyệt thuộc yêu cầu #{access_request.pk} "
+                f"(người yêu cầu: {requester.first_name} {requester.last_name} - {requester.email}).\n\n"
+                f"Vui lòng đăng nhập hệ thống để xem xét các item này.\n\n"
+                f"Trân trọng,\nHệ thống Request Access System"
+            ),
+            from_email=None,
+            recipient_list=[owner.email],
+            fail_silently=True,
+        )
+
+
 def _notify_subadmin_dispute(access_request):
     if not access_request.reviewed_by:
         return
@@ -554,6 +620,25 @@ class RequesterAccessRequestViewSet(viewsets.ModelViewSet):
 
         access_request.refresh_from_db()
         return Response(AccessRequestDetailSerializer(access_request).data)
+
+    @action(detail=True, methods=['post'])
+    def remind(self, request, pk=None):
+        access_request = self.get_object()
+
+        non_remindable = [
+            AccessRequest.Status.COMPLETED,
+            AccessRequest.Status.CANCELED,
+            AccessRequest.Status.REJECTED_BY_ADMIN,
+        ]
+        if access_request.status in non_remindable:
+            return Response(
+                {"detail": "Không thể giục Sub-admin khi request đã được xử lý xong, hủy hoặc bị từ chối."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _notify_subadmin_reminder(access_request)
+
+        return Response({"detail": "Đã gửi email nhắc nhở đến Sub-admin."})
 
     @action(detail=True, methods=['post'], serializer_class=AccessRequestDisputeSerializer)
     def dispute(self, request, pk=None):

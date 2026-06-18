@@ -1,6 +1,7 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.db import IntegrityError
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
@@ -53,22 +54,25 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         group_name = validated_data.pop('group_name')
-        
+
         # In Django default user model, username is required. We will use email as username.
         validated_data['username'] = validated_data['email']
-        
-        user = User.objects.create_user(**validated_data)
-        
+
+        try:
+            user = User.objects.create_user(**validated_data)
+        except IntegrityError:
+            raise serializers.ValidationError("Tài khoản với email này đã tồn tại.")
+
         try:
             group = Group.objects.get(name=group_name)
             user.groups.add(group)
         except Group.DoesNotExist:
-            pass # Or raise validation error if you prefer strict checking, but ChoiceField already checked it.
-            
+            pass
+
         # Send email to the newly created user
         from django.core.mail import send_mail
         from django.conf import settings
-        
+
         subject = 'Thông tin đăng nhập hệ thống Request Access System'
         message = (
             f"Xin chào {user.first_name} {user.last_name},\n\n"
@@ -79,15 +83,15 @@ class UserCreateSerializer(serializers.ModelSerializer):
             f"Vui lòng đổi mật khẩu sau khi đăng nhập (nếu hệ thống yêu cầu).\n\n"
             f"Trân trọng,\nBan Quản trị"
         )
-        
+
         send_mail(
             subject=subject,
             message=message,
-            from_email=None,  # Will use DEFAULT_FROM_EMAIL from settings
+            from_email=None,
             recipient_list=[user.email],
             fail_silently=True,
         )
-            
+
         return user
 
 class UserSerializer(serializers.ModelSerializer):

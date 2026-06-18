@@ -32,11 +32,6 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserUpdateSerializer
         return UserSerializer
 
-    def perform_destroy(self, instance):
-        # Soft delete instead of hard delete
-        instance.is_active = False
-        instance.save()
-
     @action(detail=False, methods=['get'], url_path='owners')
     def owners(self, request):
         qs = User.objects.filter(groups__name='owner', is_active=True).order_by('first_name', 'last_name')

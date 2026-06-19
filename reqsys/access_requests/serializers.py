@@ -15,9 +15,14 @@ class RequesterSimpleSerializer(serializers.ModelSerializer):
 
 
 class OwnerSimpleSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name']
+        fields = ['id', 'email', 'name']
+
+    def get_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
 
 
 class RequestItemSerializer(serializers.ModelSerializer):
@@ -39,14 +44,18 @@ class RequestItemSerializer(serializers.ModelSerializer):
 
 class OwnerBatchListSerializer(serializers.ModelSerializer):
     owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
     item_count = serializers.SerializerMethodField()
 
     class Meta:
         model = OwnerBatch
-        fields = ['id', 'owner', 'owner_email', 'status', 'item_count', 'sent_at', 'created_at']
+        fields = ['id', 'owner', 'owner_email', 'owner_name', 'status', 'item_count', 'sent_at', 'created_at']
 
     def get_owner_email(self, obj):
         return obj.owner.email if obj.owner else None
+
+    def get_owner_name(self, obj):
+        return f"{obj.owner.first_name} {obj.owner.last_name}".strip() if obj.owner else None
 
     def get_item_count(self, obj):
         return obj.items.count()
@@ -72,7 +81,7 @@ class AccessRequestListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AccessRequest
-        fields = ['id', 'requester', 'requester_email', 'requester_name', 'department_name', 'domain_name', 'status', 'created_at', 'deadline', 'item_count', 'is_urgent', 'items']
+        fields = ['id', 'requester', 'requester_email', 'requester_name', 'department_name', 'domain_name', 'status', 'created_at', 'deadline', 'item_count', 'is_urgent', 'items', 'reviewed_at']
 
     def get_requester_name(self, obj):
         return f"{obj.requester.first_name} {obj.requester.last_name}".strip()

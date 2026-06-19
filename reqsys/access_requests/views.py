@@ -135,7 +135,8 @@ def _check_request_completion(access_request):
     ).exists()
     if not has_unfinished:
         access_request.status = AccessRequest.Status.COMPLETED
-        access_request.save(update_fields=['status'])
+        access_request.reviewed_at = timezone.now()
+        access_request.save(update_fields=['status', 'reviewed_at'])
         _notify_requester_completion(access_request)
 
 
@@ -470,7 +471,8 @@ class OwnerBatchViewSet(viewsets.ReadOnlyModelViewSet):
 
         if was_completed:
             access_request.status = AccessRequest.Status.PENDING_OWNER
-            access_request.save(update_fields=['status'])
+            access_request.reviewed_at = None
+            access_request.save(update_fields=['status', 'reviewed_at'])
             _notify_requester_completion_updated(access_request)
 
         return Response({"detail": "Đã revert item.", "item_id": item.id, "status": item.status})

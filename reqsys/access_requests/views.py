@@ -11,6 +11,7 @@ from .serializers import (
     AccessRequestDetailSerializer,
     AccessRequestCreateSerializer,
     AccessRequestReviewSerializer,
+    AccessRequestRevertSerializer,
     AccessRequestDisputeSerializer,
     OwnerBatchListSerializer,
     OwnerBatchDetailSerializer,
@@ -158,6 +159,15 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
     def get_serializer_class(self):
         if self.action == 'list':
             return AccessRequestListSerializer
+        if self.action == 'retrieve':
+            return AccessRequestDetailSerializer
+        # Đọc serializer_class từ kwargs của @action decorator trên method
+        action_func = getattr(self, self.action, None)
+        if action_func:
+            action_kwargs = getattr(action_func, 'kwargs', {})
+            serializer_class = action_kwargs.get('serializer_class')
+            if serializer_class:
+                return serializer_class
         return AccessRequestDetailSerializer
 
     def get_queryset(self):
@@ -234,18 +244,13 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response(AccessRequestDetailSerializer(access_request).data)
 
-    @action(detail=True, methods=['patch'], serializer_class=AccessRequestReviewSerializer)
+    @action(detail=True, methods=['patch'], serializer_class=AccessRequestRevertSerializer)
     def revert(self, request, pk=None):
         access_request = self.get_object()
-        serializer = self.get_serializer(access_request, data=request.data, partial=True)
+        serializer = AccessRequestRevertSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        revert_note = serializer.validated_data.get('review_note', '').strip()
-        if not revert_note:
-            return Response(
-                {"detail": "Phải cung cấp lý do khi revert request."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        revert_note = serializer.validated_data.get('revert_note').strip()
 
         previous_status = access_request.status
 
@@ -594,6 +599,16 @@ class RequesterAccessRequestViewSet(viewsets.ModelViewSet):
             return AccessRequestCreateSerializer
         elif self.action == 'list':
             return AccessRequestListSerializer
+        elif self.action == 'retrieve':
+            return AccessRequestDetailSerializer
+        
+        action_func = getattr(self, self.action, None)
+        if action_func:
+            action_kwargs = getattr(action_func, 'kwargs', {})
+            serializer_class = action_kwargs.get('serializer_class')
+            if serializer_class:
+                return serializer_class
+                
         return AccessRequestDetailSerializer
 
     def perform_create(self, serializer):
@@ -655,7 +670,7 @@ class RequesterAccessRequestViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = self.get_serializer(access_request, data=request.data, partial=True)
+        serializer = AccessRequestDisputeSerializer(access_request, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
         access_request.dispute_reason = serializer.validated_data['dispute_reason']

@@ -199,6 +199,14 @@ class AccessRequestReviewSerializer(serializers.ModelSerializer):
         fields = ['review_note']
 
 
+class AccessRequestRevertSerializer(serializers.Serializer):
+    revert_note = serializers.CharField(
+        required=True, 
+        allow_blank=False, 
+        error_messages={'blank': 'Phải cung cấp lý do khi revert request.', 'required': 'Phải cung cấp lý do khi revert request.'}
+    )
+
+
 class AccessRequestDisputeSerializer(serializers.ModelSerializer):
     class Meta:
         model = AccessRequest

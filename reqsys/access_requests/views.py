@@ -518,7 +518,7 @@ def _notify_owners_revoke_access(access_request, approved_items):
 
 def _notify_subadmin_reminder(access_request):
     requester = access_request.requester
-    sub_admins = User.objects.filter(groups__name='sub-admin', is_active=True)
+    sub_admins = User.objects.filter(profile__is_subadmin=True, is_active=True)
     for sub_admin in sub_admins:
         send_mail(
             subject=f'[Request Access System] Nhắc nhở: Yêu cầu #{access_request.pk} cần được xử lý',

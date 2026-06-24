@@ -23,7 +23,6 @@ class AccessRequest(models.Model):
         on_delete=models.CASCADE,
         related_name='access_requests',
         verbose_name='Người yêu cầu',
-        limit_choices_to={'groups__name': 'requester'},
     )
     status = models.CharField(
         max_length=30,
@@ -46,7 +45,7 @@ class AccessRequest(models.Model):
         blank=True,
         related_name='reviewed_requests',
         verbose_name='Sub-admin xử lý',
-        limit_choices_to={'groups__name': 'sub-admin'},
+        limit_choices_to={'profile__is_subadmin': True},
     )
     deadline = models.DateTimeField(
         null=True,
@@ -86,7 +85,7 @@ class OwnerBatch(models.Model):
         blank=True,
         related_name='received_batches',
         verbose_name='Owner',
-        limit_choices_to={'groups__name': 'owner'},
+        limit_choices_to={'profile__is_owner': True},
     )
     status = models.CharField(
         max_length=20,

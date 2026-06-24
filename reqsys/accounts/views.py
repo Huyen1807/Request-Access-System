@@ -9,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .serializers import UserCreateSerializer, UserSerializer, UserUpdateSerializer, ChangePasswordSerializer
-from .permissions import IsSubAdmin, IsNotRequester
+from .permissions import IsSubAdmin
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -19,11 +19,11 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == 'change_password':
-            return [IsAuthenticated(), IsNotRequester()]
+            return [IsAuthenticated()]
         return super().get_permissions()
 
     def get_queryset(self):
-        return User.objects.filter(groups__name__in=['requester', 'owner']).distinct()
+        return User.objects.select_related('profile').all()
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -34,7 +34,13 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='owners')
     def owners(self, request):
-        qs = User.objects.filter(groups__name='owner', is_active=True).order_by('first_name', 'last_name')
+        qs = User.objects.filter(profile__is_owner=True, is_active=True).order_by('first_name', 'last_name')
+        serializer = UserSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='subadmins')
+    def subadmins(self, request):
+        qs = User.objects.filter(profile__is_subadmin=True, is_active=True).order_by('first_name', 'last_name')
         serializer = UserSerializer(qs, many=True)
         return Response(serializer.data)
 

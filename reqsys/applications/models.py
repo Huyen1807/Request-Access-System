@@ -33,6 +33,12 @@ class Domain(models.Model):
         related_name='domains',
         verbose_name="Phòng ban"
     )
+    managers = models.ManyToManyField(
+        User,
+        related_name='managed_domains',
+        blank=True,
+        verbose_name="Sub-admin quản lý"
+    )
 
     class Meta:
         verbose_name = "Domain"
@@ -63,7 +69,7 @@ class Application(models.Model):
         blank=True,
         related_name='owned_applications',
         verbose_name="Owner",
-        limit_choices_to={'groups__name': 'owner'}
+        limit_choices_to={'profile__is_owner': True}
     )
     is_active = models.BooleanField(default=True, verbose_name="Đang hoạt động")
 

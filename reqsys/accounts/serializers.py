@@ -34,26 +34,34 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         attrs['username'] = email
         data = super().validate(attrs)
 
-        groups = list(user.groups.values_list('name', flat=True))
-        data['role'] = groups[0] if groups else None
+        roles = ['requester']
+        profile = getattr(user, 'profile', None)
+        if profile and profile.is_subadmin:
+            roles.append('sub-admin')
+        if profile and profile.is_owner:
+            roles.append('owner')
+        data['roles'] = roles
         data['email'] = user.email
+        data['first_name'] = user.first_name
+        data['last_name'] = user.last_name
         return data
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 
 User = get_user_model()
 
 class UserCreateSerializer(serializers.ModelSerializer):
-    group_name = serializers.ChoiceField(choices=['requester', 'owner'], write_only=True)
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    is_subadmin = serializers.BooleanField(write_only=True, required=False, default=False)
+    is_owner = serializers.BooleanField(write_only=True, required=False, default=False)
 
     class Meta:
         model = User
-        fields = ('email', 'password', 'first_name', 'last_name', 'group_name')
+        fields = ('email', 'password', 'first_name', 'last_name', 'is_subadmin', 'is_owner')
 
     def create(self, validated_data):
-        group_name = validated_data.pop('group_name')
+        is_subadmin = validated_data.pop('is_subadmin', False)
+        is_owner = validated_data.pop('is_owner', False)
 
         # In Django default user model, username is required. We will use email as username.
         validated_data['username'] = validated_data['email']
@@ -63,11 +71,15 @@ class UserCreateSerializer(serializers.ModelSerializer):
         except IntegrityError:
             raise serializers.ValidationError("Tài khoản với email này đã tồn tại.")
 
-        try:
-            group = Group.objects.get(name=group_name)
-            user.groups.add(group)
-        except Group.DoesNotExist:
-            pass
+        user.profile.is_subadmin = is_subadmin
+        user.profile.is_owner = is_owner
+        user.profile.save()
+
+        roles = ['requester']
+        if is_subadmin:
+            roles.append('sub-admin')
+        if is_owner:
+            roles.append('owner')
 
         # Send email to the newly created user
         from django.core.mail import send_mail
@@ -76,7 +88,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         subject = 'Thông tin đăng nhập hệ thống Request Access System'
         message = (
             f"Xin chào {user.first_name} {user.last_name},\n\n"
-            f"Tài khoản của bạn đã được tạo thành công với vai trò: {group_name}.\n\n"
+            f"Tài khoản của bạn đã được tạo thành công với vai trò: {', '.join(roles)}.\n\n"
             f"Thông tin đăng nhập:\n"
             f"- Email: {user.email}\n"
             f"- Mật khẩu: {validated_data.get('password')}\n\n"
@@ -95,38 +107,36 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return user
 
 class UserSerializer(serializers.ModelSerializer):
-    groups = serializers.SerializerMethodField()
+    is_subadmin = serializers.BooleanField(source='profile.is_subadmin', read_only=True)
+    is_owner = serializers.BooleanField(source='profile.is_owner', read_only=True)
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'first_name', 'last_name', 'is_active', 'groups')
+        fields = ('id', 'email', 'first_name', 'last_name', 'is_active', 'is_subadmin', 'is_owner')
         read_only_fields = ('id', 'email')
-
-    def get_groups(self, obj):
-        return [group.name for group in obj.groups.all()]
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
-    group_name = serializers.ChoiceField(choices=['requester', 'owner'], write_only=True, required=False)
+    is_subadmin = serializers.BooleanField(required=False)
+    is_owner = serializers.BooleanField(required=False)
 
     class Meta:
         model = User
-        fields = ('first_name', 'last_name', 'is_active', 'group_name')
+        fields = ('first_name', 'last_name', 'is_active', 'is_subadmin', 'is_owner')
 
     def update(self, instance, validated_data):
-        group_name = validated_data.pop('group_name', None)
+        is_subadmin = validated_data.pop('is_subadmin', None)
+        is_owner = validated_data.pop('is_owner', None)
         instance = super().update(instance, validated_data)
-        
-        if group_name:
-            try:
-                group = Group.objects.get(name=group_name)
-                # Remove existing requester/owner groups
-                current_roles = instance.groups.filter(name__in=['requester', 'owner'])
-                instance.groups.remove(*current_roles)
-                instance.groups.add(group)
-            except Group.DoesNotExist:
-                pass
-                
+
+        if is_subadmin is not None or is_owner is not None:
+            profile = instance.profile
+            if is_subadmin is not None:
+                profile.is_subadmin = is_subadmin
+            if is_owner is not None:
+                profile.is_owner = is_owner
+            profile.save()
+
         return instance
 
 class ChangePasswordSerializer(serializers.Serializer):

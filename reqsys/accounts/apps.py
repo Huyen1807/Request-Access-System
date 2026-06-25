@@ -7,3 +7,7 @@ class AccountsConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401
+        from auditlog.registry import auditlog
+        from .models import UserProfile
+
+        auditlog.register(UserProfile)

@@ -17,13 +17,19 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from rest_framework.routers import DefaultRouter
+from accounts.audit_views import AuditLogViewSet
+
+audit_router = DefaultRouter()
+audit_router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
     path('api/', include('applications.urls')),
     path('api/', include('access_requests.urls')),
-    
+    path('api/', include(audit_router.urls)),
+
     # OpenAPI Schema
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Swagger UI

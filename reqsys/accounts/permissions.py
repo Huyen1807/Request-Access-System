@@ -9,7 +9,8 @@ class IsSubAdmin(permissions.BasePermission):
         return bool(
             request.user and
             request.user.is_authenticated and
-            getattr(request.user.profile, 'is_subadmin', False)
+            hasattr(request.user, 'profile') and
+            request.user.profile.is_subadmin
         )
 
 
@@ -21,7 +22,8 @@ class IsOwner(permissions.BasePermission):
         return bool(
             request.user and
             request.user.is_authenticated and
-            getattr(request.user.profile, 'is_owner', False)
+            hasattr(request.user, 'profile') and
+            request.user.profile.is_owner
         )
 
 
@@ -52,5 +54,9 @@ class IsDomainManager(permissions.BasePermission):
     of that related Domain).
     """
     def has_object_permission(self, request, view, obj):
+        if request.user and request.user.is_superuser:
+            return True
         domain = getattr(obj, 'domain', obj)
+        if not domain.managers.exists():
+            return True
         return domain.managers.filter(pk=request.user.pk).exists()

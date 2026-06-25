@@ -28,10 +28,20 @@ class DomainSerializer(serializers.ModelSerializer):
     department_code = serializers.CharField(source='department.code', read_only=True)
     application_count = serializers.SerializerMethodField(read_only=True)
     managers = DomainManagerSerializer(many=True, read_only=True)
+    manager_ids = serializers.PrimaryKeyRelatedField(
+        source='managers',
+        queryset=User.objects.filter(profile__is_subadmin=True),
+        many=True,
+        write_only=True,
+        required=False,
+        error_messages={
+            'does_not_exist': 'Không tìm thấy user với ID này hoặc user không phải là sub-admin.'
+        }
+    )
 
     class Meta:
         model = Domain
-        fields = ['id', 'name', 'code', 'description', 'department', 'department_name', 'department_code', 'application_count', 'managers']
+        fields = ['id', 'name', 'code', 'description', 'department', 'department_name', 'department_code', 'application_count', 'managers', 'manager_ids']
         extra_kwargs = {
             'department': {'write_only': False}
         }
@@ -52,6 +62,13 @@ class DomainSerializer(serializers.ModelSerializer):
                 {"name": f"Domain tên '{name}' đã tồn tại trong phòng ban này."}
             )
         return attrs
+
+    def create(self, validated_data):
+        managers = validated_data.pop('managers', [])
+        domain = super().create(validated_data)
+        if managers:
+            domain.managers.set(managers)
+        return domain
 
 
 class ApplicationOwnerSerializer(serializers.ModelSerializer):
@@ -124,7 +141,7 @@ class ApplicationAssignOwnerSerializer(serializers.Serializer):
         except User.DoesNotExist:
             raise serializers.ValidationError("Không tìm thấy user với ID này.")
 
-        if not getattr(user.profile, 'is_owner', False):
+        if not (hasattr(user, 'profile') and user.profile.is_owner):
             raise serializers.ValidationError(
                 "User này không có vai trò 'owner'. Chỉ có thể gán owner cho user có vai trò owner."
             )
@@ -141,7 +158,7 @@ class DomainAssignSubAdminSerializer(serializers.Serializer):
         except User.DoesNotExist:
             raise serializers.ValidationError("Không tìm thấy user với ID này.")
 
-        if not getattr(user.profile, 'is_subadmin', False):
+        if not (hasattr(user, 'profile') and user.profile.is_subadmin):
             raise serializers.ValidationError(
                 "User này không có vai trò 'sub-admin'. Chỉ có thể gán user có vai trò sub-admin."
             )

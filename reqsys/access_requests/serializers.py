@@ -178,6 +178,12 @@ class AccessRequestCreateSerializer(serializers.ModelSerializer):
         applications = Application.objects.filter(id__in=value)
         if applications.count() != len(set(value)):
             raise serializers.ValidationError("Một số Application ID không hợp lệ hoặc không tồn tại.")
+        
+        # Kiểm tra tất cả ứng dụng phải thuộc cùng 1 domain
+        domains = {app.domain_id for app in applications}
+        if len(domains) > 1:
+            raise serializers.ValidationError("Tất cả các ứng dụng trong một yêu cầu phải thuộc cùng một domain.")
+            
         return list(set(value))
 
     def create(self, validated_data):

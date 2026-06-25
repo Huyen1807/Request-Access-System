@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import UserCreateSerializer, UserSerializer, UserUpdateSerializer, ChangePasswordSerializer
 from .permissions import IsSubAdmin
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema
 
 User = get_user_model()
 
@@ -32,12 +33,14 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserUpdateSerializer
         return UserSerializer
 
+    @extend_schema(responses=UserSerializer(many=True))
     @action(detail=False, methods=['get'], url_path='owners')
     def owners(self, request):
         qs = User.objects.filter(profile__is_owner=True, is_active=True).order_by('first_name', 'last_name')
         serializer = UserSerializer(qs, many=True)
         return Response(serializer.data)
 
+    @extend_schema(responses=UserSerializer(many=True))
     @action(detail=False, methods=['get'], url_path='subadmins')
     def subadmins(self, request):
         qs = User.objects.filter(profile__is_subadmin=True, is_active=True).order_by('first_name', 'last_name')

@@ -6,4 +6,10 @@ class ApplicationsConfig(AppConfig):
     name = 'applications'
 
     def ready(self):
-        import applications.signals
+        import applications.signals  # noqa: F401
+        from auditlog.registry import auditlog
+        from .models import Department, Domain, Application
+
+        auditlog.register(Department)
+        auditlog.register(Domain)
+        auditlog.register(Application)

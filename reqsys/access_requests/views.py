@@ -172,6 +172,12 @@ class AccessRequestViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        
+        # Lọc chỉ hiển thị các request có item thuộc domain mà user đang quản lý
+        queryset = queryset.filter(
+            items__application__domain__managers=self.request.user
+        ).distinct()
+
         status_param = self.request.query_params.get('status')
         if status_param:
             queryset = queryset.filter(status=status_param)
@@ -342,12 +348,17 @@ class SubAdminBatchViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated, IsSubAdmin]
 
     def get_queryset(self):
-        return (
+        queryset = (
             OwnerBatch.objects
             .select_related('owner')
             .prefetch_related('items__application__domain__department', 'items__access_request')
             .all()
         )
+        # Lọc batch chứa các item thuộc domain mà sub-admin quản lý
+        queryset = queryset.filter(
+            items__application__domain__managers=self.request.user
+        ).distinct()
+        return queryset
 
     def get_serializer_class(self):
         if self.action == 'list':

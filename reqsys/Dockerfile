@@ -1,23 +1,20 @@
 FROM python:3.12-slim
 
-# Đặt thư mục làm việc trong container
 WORKDIR /app
 
-# Cài đặt dependencies trước (tận dụng Docker layer cache)
-COPY reqsys/requirements.txt .
-RUN pip install --no-cache-dir -r reqsys/requirements.txt
-
-# Copy toàn bộ source code vào container
+# Copy toàn bộ project trước (bao gồm folder reqsys)
 COPY . .
 
-# Thu thập static files (CSS/JS của Django Admin)
-RUN python manage.py collectstatic --noinput
+# Cài pip (requirements.txt đã có trong /app sau COPY . .)
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port 8000 ra ngoài container
+# Collect static files
+RUN python manage.py collectstatic --noinput || true
+
 EXPOSE 8000
 
-# Cấp quyền thực thi cho build.sh và chạy nó trước khi khởi động Gunicorn
+# Cấp quyền execute
 RUN chmod +x build.sh
 
+# Run
 CMD ["/bin/sh", "-c", "./build.sh && gunicorn reqsys.wsgi:application --bind 0.0.0.0:8000 --workers 2"]
-

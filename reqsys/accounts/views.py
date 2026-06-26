@@ -47,6 +47,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = UserSerializer(qs, many=True)
         return Response(serializer.data)
 
+    @extend_schema(request=ChangePasswordSerializer, responses={200: None})
     @action(detail=False, methods=['post'], url_path='change-password')
     def change_password(self, request):
         serializer = ChangePasswordSerializer(data=request.data, context={'request': request})

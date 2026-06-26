@@ -32,12 +32,14 @@ class RequestItemSerializer(serializers.ModelSerializer):
     access_request_id = serializers.CharField(source='access_request.id', read_only=True)
     requester_email = serializers.CharField(source='access_request.requester.email', read_only=True)
     requester_name = serializers.SerializerMethodField()
+    deadline = serializers.DateTimeField(source='access_request.deadline', read_only=True)
+    is_urgent = serializers.SerializerMethodField()
 
     class Meta:
         model = RequestItem
         fields = [
             'id', 'access_request_id', 'application', 'application_name', 'application_code',
-            'owner_email', 'status', 'owner_note', 'requester_email', 'requester_name',
+            'owner_email', 'status', 'owner_note', 'requester_email', 'requester_name', 'deadline', 'is_urgent',
         ]
 
     def get_owner_email(self, obj):
@@ -46,6 +48,14 @@ class RequestItemSerializer(serializers.ModelSerializer):
     def get_requester_name(self, obj):
         requester = obj.access_request.requester
         return f"{requester.first_name} {requester.last_name}".strip()
+
+    def get_is_urgent(self, obj):
+        req = obj.access_request
+        if req.deadline and req.status in [AccessRequest.Status.PENDING_ADMIN, AccessRequest.Status.PENDING_OWNER]:
+            time_remaining = req.deadline - timezone.now()
+            if timedelta(0) <= time_remaining <= timedelta(hours=24):
+                return True
+        return False
 
 
 class OwnerBatchListSerializer(serializers.ModelSerializer):

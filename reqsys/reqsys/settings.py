@@ -171,7 +171,10 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # CORS
 _cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173')
-CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
+CORS_ALLOWED_ORIGINS = [
+    "https://request-app-bice.vercel.app",
+    "http://localhost:3000",
+]
 CORS_ALLOW_CREDENTIALS = True
 
 # Session Configuration

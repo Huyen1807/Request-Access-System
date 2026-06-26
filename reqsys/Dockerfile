@@ -4,8 +4,8 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Cài đặt dependencies trước (tận dụng Docker layer cache)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY reqsys/requirements.txt .
+RUN pip install --no-cache-dir -r reqsys/requirements.txt
 
 # Copy toàn bộ source code vào container
 COPY . .

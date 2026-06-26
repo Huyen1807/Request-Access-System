@@ -30,16 +30,22 @@ class RequestItemSerializer(serializers.ModelSerializer):
     application_code = serializers.CharField(source='application.code', read_only=True)
     owner_email = serializers.SerializerMethodField()
     access_request_id = serializers.CharField(source='access_request.id', read_only=True)
+    requester_email = serializers.CharField(source='access_request.requester.email', read_only=True)
+    requester_name = serializers.SerializerMethodField()
 
     class Meta:
         model = RequestItem
         fields = [
             'id', 'access_request_id', 'application', 'application_name', 'application_code',
-            'owner_email', 'status', 'owner_note',
+            'owner_email', 'status', 'owner_note', 'requester_email', 'requester_name',
         ]
 
     def get_owner_email(self, obj):
         return obj.application.owner.email if obj.application.owner else None
+
+    def get_requester_name(self, obj):
+        requester = obj.access_request.requester
+        return f"{requester.first_name} {requester.last_name}".strip()
 
 
 class OwnerBatchListSerializer(serializers.ModelSerializer):

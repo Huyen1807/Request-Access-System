@@ -466,6 +466,13 @@ class OwnerBatchViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         item_id = serializer.validated_data['item_id']
+        owner_note = serializer.validated_data.get('owner_note', '').strip()
+
+        if not owner_note:
+            return Response(
+                {"detail": "Phải cung cấp lý do khi hoàn tác quyết định."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             item = batch.items.select_related('access_request').get(
@@ -478,20 +485,18 @@ class OwnerBatchViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        access_request = item.access_request
-        was_completed = access_request.status == AccessRequest.Status.COMPLETED
+        # Đảo ngược trạng thái: approved → rejected_by_owner, rejected_by_owner → approved
+        if item.status == RequestItem.Status.APPROVED:
+            item.status = RequestItem.Status.REJECTED_BY_OWNER
+        else:
+            item.status = RequestItem.Status.APPROVED
 
-        item.status = RequestItem.Status.PENDING_OWNER
-        item.owner_note = ''
+        item.owner_note = owner_note
         item.save()
 
-        if was_completed:
-            access_request.status = AccessRequest.Status.PENDING_OWNER
-            access_request.reviewed_at = None
-            access_request.save(update_fields=['status', 'reviewed_at'])
-            _notify_requester_completion_updated(access_request)
+        _notify_requester_completion_updated(item.access_request)
 
-        return Response({"detail": "Đã revert item.", "item_id": item.id, "status": item.status})
+        return Response({"detail": "Đã hoàn tác quyết định.", "item_id": item.id, "status": item.status})
 
 
 def _notify_owners_revoke_access(access_request, approved_items):
